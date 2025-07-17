@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using UnityEngine;
 
 public class Player : MonoBehaviour
@@ -9,7 +10,7 @@ public class Player : MonoBehaviour
     [SerializeField] Transform character;
     [SerializeField] Animator anicon;
     [SerializeField] float moveSpeed; // 이동 속도
-    [SerializeField] float runSpeed; //달리기 속도
+
     [Header("카메라")]
     public Transform camArm;
     public float camAngleSpeed;
@@ -35,7 +36,7 @@ public class Player : MonoBehaviour
         Move();
         LookAround();
         Jump();
-        Run();
+        Attack();
     }
 
     void Jump()
@@ -84,46 +85,11 @@ public class Player : MonoBehaviour
             }
         }
 
-
         // 애니메이션
         if(isJump == false)
         {
             anicon.SetBool("ISWALK", moveValue != 0);
         }
-    }
-
-    void Run()
-    {
-        // 입력
-        Vector2 rawInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-        moveInput.x = Mathf.MoveTowards(moveInput.x, rawInput.x, Time.deltaTime * 10);
-        moveInput.y = Mathf.MoveTowards(moveInput.y, rawInput.y, Time.deltaTime * 10);
-        float moveValue = moveInput.magnitude;
-
-        // 이동
-        if (Input.GetKeyDown(KeyCode.LeftShift) && (moveValue != 0))
-        {
-            Vector3 lookForward = new Vector3(camArm.forward.x, 0f, camArm.forward.z).normalized;
-            Vector3 lookRight = new Vector3(camArm.right.x, 0f, camArm.right.z).normalized;
-            Vector3 moveDir = lookForward * moveInput.y + lookRight * moveInput.x;
-
-            character.forward = moveDir;
-
-            rigid.MovePosition(character.position + (moveDir * Time.deltaTime * runSpeed));
-
-            if (moveInput != Vector2.zero)
-            {
-                Vector3 inputForward = new Vector3(moveInput.x, 0f, moveInput.y).normalized;
-                Quaternion targetRotation = Quaternion.LookRotation(inputForward);
-                character.rotation = Quaternion.Slerp(character.rotation, targetRotation, Time.deltaTime * 10f);
-            }
-        }
-
-
-        // 애니메이션
-        
-        anicon.SetTrigger("RUN");
-
     }
 
     public void LookAround()
@@ -144,5 +110,57 @@ public class Player : MonoBehaviour
 
         camArm.rotation = Quaternion.Euler(camAngleX, camAngle.y + mouseDelta.x, camAngle.z);
 
+    }
+
+    [SerializeField] int attackRange;
+    [SerializeField] int attackAngle;
+
+    void Attack()
+    {
+        if (Input.GetKeyDown(KeyCode.X))
+        {
+            anicon.SetTrigger("ATTACK");
+        }
+    }
+
+    public void AttackMonster()
+    {
+        Collider[] hitColliders = Physics.OverlapSphere(transform.position, attackRange);
+
+        foreach (Collider collider in hitColliders)
+        {
+            Monster monster = collider.GetComponent<Monster>();
+            if (monster != null)
+            {
+                Vector3 directionToTarget = (monster.transform.position - transform.position).normalized;
+                float dot = Vector3.Dot(transform.forward, directionToTarget);
+
+                float angleThreshold = Mathf.Cos(attackAngle * 0.5f * Mathf.Deg2Rad);
+
+                if (dot >= angleThreshold)
+                {
+                    // 범위 내 몬스터에게 피해
+                    monster.Damaged();
+                }
+            }
+        }
+    }
+
+    // 공격 범위 시각화 (Scene 뷰에서만 보임)
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+
+        Vector3 forward = transform.forward;
+        Quaternion leftRotation = Quaternion.Euler(0, -attackAngle / 2, 0);
+        Quaternion rightRotation = Quaternion.Euler(0, attackAngle / 2, 0);
+
+        Vector3 leftDirection = leftRotation * forward;
+        Vector3 rightDirection = rightRotation * forward;
+
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawLine(transform.position, transform.position + leftDirection * attackRange);
+        Gizmos.DrawLine(transform.position, transform.position + rightDirection * attackRange);
     }
 }
